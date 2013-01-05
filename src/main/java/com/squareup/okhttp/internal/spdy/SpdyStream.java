@@ -59,6 +59,10 @@ public final class SpdyStream {
     public static final int RST_CANCEL = 5;
     public static final int RST_INTERNAL_ERROR = 6;
     public static final int RST_FLOW_CONTROL_ERROR = 7;
+    public static final int RST_STREAM_IN_USE = 8;
+    public static final int RST_STREAM_ALREADY_CLOSED = 9;
+    public static final int RST_INVALID_CREDENTIALS = 10;
+    public static final int RST_FRAME_TOO_LARGE = 11;
 
     private final int id;
     private final SpdyConnection connection;

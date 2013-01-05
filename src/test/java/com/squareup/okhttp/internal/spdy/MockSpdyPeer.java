@@ -136,7 +136,9 @@ public final class MockSpdyPeer {
         public int streamId;
         public int associatedStreamId;
         public int priority;
+        public int slot;
         public int statusCode;
+        public int deltaWindowSize;
         public List<String> nameValueBlock;
         public byte[] data;
         public Settings settings;
@@ -154,13 +156,14 @@ public final class MockSpdyPeer {
         }
 
         @Override public void synStream(int flags, int streamId, int associatedStreamId,
-                int priority, List<String> nameValueBlock) {
+                int priority, int slot, List<String> nameValueBlock) {
             if (this.type != -1) throw new IllegalStateException();
             this.type = SpdyConnection.TYPE_SYN_STREAM;
             this.flags = flags;
             this.streamId = streamId;
             this.associatedStreamId = associatedStreamId;
             this.priority = priority;
+            this.slot = slot;
             this.nameValueBlock = nameValueBlock;
         }
 
@@ -210,11 +213,20 @@ public final class MockSpdyPeer {
             this.type = SpdyConnection.TYPE_NOOP;
         }
 
-        @Override public void goAway(int flags, int lastGoodStreamId) {
+        @Override public void goAway(int flags, int lastGoodStreamId, int statusCode) {
             if (this.type != -1) throw new IllegalStateException();
             this.type = SpdyConnection.TYPE_GOAWAY;
             this.flags = flags;
             this.streamId = lastGoodStreamId;
+            this.statusCode = statusCode;
+        }
+
+        @Override public void windowUpdate(int flags, int streamId, int deltaWindowSize) {
+            if (this.type != -1) throw new IllegalStateException();
+            this.type = SpdyConnection.TYPE_WINDOW_UPDATE;
+            this.flags = flags;
+            this.streamId = streamId;
+            this.deltaWindowSize = deltaWindowSize;
         }
     }
 }

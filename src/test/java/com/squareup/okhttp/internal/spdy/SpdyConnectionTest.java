@@ -20,6 +20,8 @@ import static com.squareup.okhttp.internal.Util.UTF_8;
 import static com.squareup.okhttp.internal.spdy.Settings.PERSIST_VALUE;
 import static com.squareup.okhttp.internal.spdy.SpdyConnection.FLAG_FIN;
 import static com.squareup.okhttp.internal.spdy.SpdyConnection.FLAG_UNIDIRECTIONAL;
+import static com.squareup.okhttp.internal.spdy.SpdyConnection.GOAWAY_INTERNAL_ERROR;
+import static com.squareup.okhttp.internal.spdy.SpdyConnection.GOAWAY_PROTOCOL_ERROR;
 import static com.squareup.okhttp.internal.spdy.SpdyConnection.TYPE_DATA;
 import static com.squareup.okhttp.internal.spdy.SpdyConnection.TYPE_GOAWAY;
 import static com.squareup.okhttp.internal.spdy.SpdyConnection.TYPE_NOOP;
@@ -51,6 +53,27 @@ public final class SpdyConnectionTest {
         }
     };
     private final MockSpdyPeer peer = new MockSpdyPeer();
+
+    // TESTS NEEDED
+
+    // synStream priority and slot are stored
+    // RST_STREAM_IN_USE = 8;
+    // RST_STREAM_ALREADY_CLOSED = 9;
+    // RST_INVALID_CREDENTIALS = 10;
+    // RST_FRAME_TOO_LARGE = 11;
+    // GOAWAY STATUS CODES
+    // Window update
+    // Is the version of a credential '1' (as in the doc) or '3' (as it should be)
+
+//    @Test public void testFoo() throws Exception {
+//        byte[] b = new byte[SpdyReader.DIC.length];
+//        for (int i = 0; i < b.length; i++) {
+//            b[i] = (byte) SpdyReader.DIC[i];
+//        }
+//        String s = new String(b, "UTF-8");
+//        System.out.println();
+//
+//    }
 
     @Test public void clientCreatesStreamAndServerReplies() throws Exception {
         // write the mocking script
@@ -113,7 +136,7 @@ public final class SpdyConnectionTest {
 
     @Test public void serverCreatesStreamAndClientReplies() throws Exception {
         // write the mocking script
-        peer.sendFrame().synStream(0, 2, 0, 0, Arrays.asList("a", "android"));
+        peer.sendFrame().synStream(0, 2, 0, 0, 0, Arrays.asList("a", "android"));
         peer.acceptFrame();
         peer.play();
 
@@ -143,7 +166,7 @@ public final class SpdyConnectionTest {
 
     @Test public void replyWithNoData() throws Exception {
         // write the mocking script
-        peer.sendFrame().synStream(0, 2, 0, 0, Arrays.asList("a", "android"));
+        peer.sendFrame().synStream(0, 2, 0, 0, 0, Arrays.asList("a", "android"));
         peer.acceptFrame();
         peer.play();
 
@@ -390,7 +413,7 @@ public final class SpdyConnectionTest {
     @Test public void serverClosesClientOutputStream() throws Exception {
         // write the mocking script
         peer.acceptFrame(); // SYN_STREAM
-        peer.sendFrame().synReset(1, SpdyStream.RST_CANCEL);
+        peer.sendFrame().rstStream(1, SpdyStream.RST_CANCEL);
         peer.acceptFrame(); // PING
         peer.sendFrame().ping(0, 1);
         peer.play();
@@ -564,9 +587,9 @@ public final class SpdyConnectionTest {
 
     @Test public void remoteDoubleSynStream() throws Exception {
         // write the mocking script
-        peer.sendFrame().synStream(0, 2, 0, 0, Arrays.asList("a", "android"));
+        peer.sendFrame().synStream(0, 2, 0, 0, 0, Arrays.asList("a", "android"));
         peer.acceptFrame();
-        peer.sendFrame().synStream(0, 2, 0, 0, Arrays.asList("b", "banana"));
+        peer.sendFrame().synStream(0, 2, 0, 0, 0, Arrays.asList("b", "banana"));
         peer.acceptFrame();
         peer.play();
 
@@ -651,7 +674,7 @@ public final class SpdyConnectionTest {
     @Test public void remoteSendsRefusedStreamBeforeReplyHeaders() throws Exception {
         // write the mocking script
         peer.acceptFrame();
-        peer.sendFrame().synReset(1, RST_REFUSED_STREAM);
+        peer.sendFrame().rstStream(1, RST_REFUSED_STREAM);
         peer.sendFrame().ping(0, 2);
         peer.acceptFrame();
         peer.play();
@@ -680,7 +703,7 @@ public final class SpdyConnectionTest {
         // write the mocking script
         peer.acceptFrame(); // SYN STREAM 1
         peer.acceptFrame(); // SYN STREAM 3
-        peer.sendFrame().goAway(0, 1);
+        peer.sendFrame().goAway(0, 1, GOAWAY_PROTOCOL_ERROR);
         peer.acceptFrame(); // PING
         peer.sendFrame().ping(0, 1);
         peer.acceptFrame(); // DATA STREAM 1
@@ -726,7 +749,7 @@ public final class SpdyConnectionTest {
         peer.acceptFrame(); // SYN STREAM 1
         peer.acceptFrame(); // GOAWAY
         peer.acceptFrame(); // PING
-        peer.sendFrame().synStream(0, 2, 0, 0, Arrays.asList("b", "banana")); // Should be ignored!
+        peer.sendFrame().synStream(0, 2, 0, 0, 0, Arrays.asList("b", "b")); // Should be ignored!
         peer.sendFrame().ping(0, 1);
         peer.play();
 
@@ -734,7 +757,7 @@ public final class SpdyConnectionTest {
         SpdyConnection connection = new SpdyConnection.Builder(true, peer.openSocket()).build();
         connection.newStream(Arrays.asList("a", "android"), true, true);
         Ping ping = connection.ping();
-        connection.shutdown();
+        connection.shutdown(GOAWAY_PROTOCOL_ERROR);
         ping.roundTripTime(); // Ensure that the SYN STREAM has been received.
         assertEquals(1, connection.openStreamCount());
 
@@ -746,6 +769,7 @@ public final class SpdyConnectionTest {
         MockSpdyPeer.InFrame goaway = peer.takeFrame();
         assertEquals(TYPE_GOAWAY, goaway.type);
         assertEquals(0, goaway.streamId);
+        assertEquals(GOAWAY_PROTOCOL_ERROR, goaway.statusCode);
     }
 
     @Test public void noPingsAfterShutdown() throws Exception {
@@ -755,7 +779,7 @@ public final class SpdyConnectionTest {
 
         // play it back
         SpdyConnection connection = new SpdyConnection.Builder(true, peer.openSocket()).build();
-        connection.shutdown();
+        connection.shutdown(GOAWAY_INTERNAL_ERROR);
         try {
             connection.ping();
             fail();
@@ -766,6 +790,7 @@ public final class SpdyConnectionTest {
         // verify the peer received what was expected
         MockSpdyPeer.InFrame goaway = peer.takeFrame();
         assertEquals(TYPE_GOAWAY, goaway.type);
+        assertEquals(GOAWAY_INTERNAL_ERROR, goaway.statusCode);
     }
 
     @Test public void close() throws Exception {
